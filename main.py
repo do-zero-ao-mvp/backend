@@ -1,16 +1,81 @@
 
 from dotenv import load_dotenv
 
-from backend.meu_app_backend.utils.constants import ENV
 load_dotenv()
 
-import os
-from typing import Union
+from utils.constants import ALGORITHMS, API_AUDIENCE, AUTH0_DOMAIN, ENV
 
-from fastapi import FastAPI
+
+import os
+import json
+from urllib.request import urlopen
+
+from typing import Union
+from fastapi import FastAPI, HTTPException, Request, Response
 import uvicorn
+from jose import JWTError, jwt
+
 
 app = FastAPI()
+app_public = FastAPI(openapi_prefix='/public')
+app_private = FastAPI(openapi_prefix='/api')
+
+
+app.mount("/public", app_public)
+app.mount("/api", app_private)
+
+origins = ["*"]
+
+
+def decode_jwt(token: str):
+    try:
+        token = token.split(" ")[1]
+        jsonurl = urlopen("https://" + AUTH0_DOMAIN + "/.well-known/jwks.json")
+        jwks = json.loads(jsonurl.read())
+        unverified_header = jwt.get_unverified_header(token)
+        rsa_key = {}
+        for key in jwks["keys"]:
+            if key["kid"] == unverified_header["kid"]:
+                rsa_key = {
+                    "kty": key["kty"],
+                    "kid": key["kid"],
+                    "use": key["use"],
+                    "n": key["n"],
+                    "e": key["e"],
+                }
+        if rsa_key:
+            try:
+                payload = jwt.decode(
+                    token,
+                    rsa_key,
+                    algorithms=ALGORITHMS,
+                    audience=API_AUDIENCE,
+                    issuer="https://" + AUTH0_DOMAIN + "/",
+                )
+            except jwt.ExpiredSignatureError:
+                raise HTTPException(status_code=401, detail="token_expired")
+            except jwt.JWTClaimsError:
+                raise HTTPException(status_code=404, detail="invalid_claims")
+
+            except Exception:
+                raise HTTPException(status_code=401, detail="invalid_header")
+        if payload is not None:
+            return payload
+        raise HTTPException(status_code=401, detail="invalid_header")
+    except:
+        raise HTTPException(status_code=401, detail="invalid_header")
+
+
+@app_private.middleware("http")
+async def verify_user_agent(request: Request, call_next):
+    try:
+        token = request.headers["Authorization"]
+        payload = decode_jwt(token)
+        response = await call_next(request)
+        return response
+    except  Exception as err:
+
+        return Response(status_code=403)
 
 
 @app.get("/")
@@ -19,8 +84,8 @@ def read_root():
 
 
 @app.get("/items/{item_id}")
-def read_item(item_id: int, q: Union[str, None] = None):
-    return {"item_id": item_id, "q": q}
+def read_item(item_id: int):
+    return {"item_id": item_id}
 
 
 if __name__ == '__main__':
