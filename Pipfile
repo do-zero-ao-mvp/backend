@@ -8,6 +8,7 @@ fastapi = "*"
 uvicorn = {extras = ["standard"], version = "*"}
 jose = "*"
 python-jose = "*"
+firebase-admin = "*"
 
 [dev-packages]
 

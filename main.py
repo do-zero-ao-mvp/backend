@@ -3,8 +3,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from utils.constants import ALGORITHMS, API_AUDIENCE, AUTH0_DOMAIN, ENV
-
+from utils.constants import ALGORITHMS, API_AUDIENCE, API_DOMAIN, AUTH0_DOMAIN, ENV
+from fastapi.middleware.cors import CORSMiddleware
 
 import os
 import json
@@ -26,6 +26,32 @@ app.mount("/api", app_private)
 
 origins = ["*"]
 
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+app_private.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+app_public.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def decode_jwt(token: str):
     try:
@@ -54,7 +80,7 @@ def decode_jwt(token: str):
                 )
             except jwt.ExpiredSignatureError:
                 raise HTTPException(status_code=401, detail="token_expired")
-            except jwt.JWTClaimsError:
+            except jwt.JWTClaimsError as err:
                 raise HTTPException(status_code=404, detail="invalid_claims")
 
             except Exception:
@@ -83,9 +109,26 @@ def read_root():
     return {"Hello": "World"}
 
 
-@app.get("/items/{item_id}")
+@app_private.get("/items/{item_id}")
 def read_item(item_id: int):
     return {"item_id": item_id}
+
+
+# @app_public.get("/items")
+# def read_item():
+#     return get_items()
+
+
+
+# @app_public.get("/items/add/{item_id}")
+# def add_item(item_id: str):
+#     return save_item(item_id,)
+
+
+# @app_public.get("/items/delete/{item_id}")
+# def read_item(item_id: str):
+#     return remove_item(item_id)
+
 
 
 if __name__ == '__main__':
@@ -94,8 +137,8 @@ if __name__ == '__main__':
                     host="0.0.0.0",
                     port=80,
                     reload=True,
-                    ssl_keyfile="certs/fullchain.pem",
-                    ssl_certfile="certs/cert.pem"
+                    ssl_keyfile=f"/code/certs/live/{API_DOMAIN}/privkey.pem",
+                    ssl_certfile=f"/code/certs/live/{API_DOMAIN}/fullchain.pem"
                     )
     else:
         uvicorn.run("main:app",
